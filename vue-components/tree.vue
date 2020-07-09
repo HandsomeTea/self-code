@@ -2,9 +2,10 @@
     <div class="tree_contain">
         <!-- 树顶的单选多选和关键字搜索框 -->
         <div class="tree_header">
+            <el-button type="primary" icon="el-icon-refresh" size="mini" class="plain_btn tree_header_refresh" title="重置" plain @click="resetChosed" />
+            <input class="tree_header_input" type="text" v-model="keyword" placeholder="关键字搜索" />
             <el-checkbox v-if="option.single" v-model="chose.single" size="mini" label="单选" />
             <el-checkbox v-if="option.multiple" v-model="chose.multiple" size="mini" label="多选" />
-            <el-input v-model="keyword" placeholder="关键字搜索" size="mini" />
             <div style="clear:both"></div>
         </div>
 
@@ -395,6 +396,18 @@ export default {
         clickBranch(_branchId) {
             this.clickedBranchId = _branchId;
         },
+        resetChosed() {
+            this.keyword = '';
+            this.clickedBranchId = '';
+            if (this.option.single) {
+                this.chose.single = false;
+                this.singleChosed = '';
+            }
+            if (this.option.multiple) {
+                this.chose.multiple = false;
+                this.multipleChosed = [];
+            }
+        },
         multipleChangeChosed(isChosed, event) {
             const id = event.target.value;
             if (isChosed === true) {//如果选中，则选中的值时model数据的最后一个元素
@@ -529,25 +542,46 @@ export default {
     overflow: hidden;
 }
 .tree_header {
-    padding: 10px;
+    padding: 10px 10px 8px;
     background-color: #fff;
     width: 340px;
     border-radius: 8px;
     border-bottom-right-radius: 0;
 }
 .tree_header .el-checkbox {
-    margin-top: 5px;
+    margin-top: 3px;
     margin-right: 10px;
-    float: left;
-}
-.tree_header .el-input {
-    width: 170px;
     float: right;
 }
 
+.tree_header_input {
+    width: 135px;
+    padding: 0 9px;
+    line-height: 24px;
+    height: 24px;
+    float: right;
+    background-color: #fff;
+    background-image: none;
+    border-radius: 6px;
+    border: 1px solid #dcdfe6;
+    color: #606266;
+    font-size: inherit;
+    outline: none;
+    transition: border-color 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+}
+.tree_header_input:focus {
+    outline: none;
+    border-color: #409eff;
+}
+.tree_header_refresh {
+    padding: 4px 10px;
+    font-size: 14px;
+}
+
 .tree_split {
-    margin: 0 10px 10px;
+    margin: 0 10px;
     width: calc(100% - 20px);
+    background-color: #eff1f7;
 }
 .tree_body {
     max-height: 610px;
