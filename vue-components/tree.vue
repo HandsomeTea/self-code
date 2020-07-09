@@ -155,12 +155,21 @@ export default {
             this.multipleChosed = [];
             this.clickedBranchId = '';
         },
+        clickedBranchId(newvalue, oldValue) {
+            if (newvalue) {
+                this.$emit('chosed-change', {
+                    [this.clickedBranchId]: this.treeBranchIdMap[this.clickedBranchId].data
+                });
+            } else {//开启单选/多选时clickedBranchId被置为空
+                this.$emit('chosed-change', {});
+            }
+        },
         singleChosed() {
-            if (this.singleChosed) {
+            if (this.singleChosed) {//单选变动的时候
                 this.$emit('chosed-change', {
                     [this.singleChosed]: this.treeBranchIdMap[this.singleChosed].data
                 });
-            } else {
+            } else {//取消单选的时候
                 this.$emit('chosed-change', {});
             }
         },
@@ -385,7 +394,6 @@ export default {
         },
         clickBranch(_branchId) {
             this.clickedBranchId = _branchId;
-            this.$emit('branch-click', this.treeBranchIdMap[_branchId].data);
         },
         multipleChangeChosed(isChosed, event) {
             const id = event.target.value;
