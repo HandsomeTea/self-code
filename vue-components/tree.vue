@@ -19,7 +19,7 @@
                         <!-- 树枝的展开和收起按钮 -->
                         <i
                             v-if="branch.depth !== 1 && branch.hasChildren && branch.expand"
-                            @click="toggleExpand(branch.id, false, branch.depth)"
+                            @click="toggleExpand(branch.id, false)"
                             class="el-icon-caret-right branch_extend_icon"
                         />
                         <i
@@ -105,8 +105,8 @@ export default {
             type: Array
         },
         treeName: {//树的名称
-            required: true,
-            type: String
+            type: String,
+            default: ''
         }
     },
     data() {
@@ -122,6 +122,7 @@ export default {
              * hasChildren: false,是否有子级
              * data: {} 传入的每个树枝的原始数据
              */
+            treeTitle: this.treeName || this.$store.state.tenantSetting.tenantName,
             treeData: [],
             treeBranchIdMap: {},
             keyword: '',
@@ -155,11 +156,13 @@ export default {
             this.clickedBranchId = '';
         },
         singleChosed() {
-            const map = {};
-            (this.singleChosed ? [this.singleChosed] : []).map(a => {
-                map[a] = this.treeBranchIdMap[a].data;
-            });
-            this.$emit('chosed-change', map);
+            if (this.singleChosed) {
+                this.$emit('chosed-change', {
+                    [this.singleChosed]: this.treeBranchIdMap[this.singleChosed].data
+                });
+            } else {
+                this.$emit('chosed-change', {});
+            }
         },
         multipleChosed(newvalue, oldValue) {
             if (!(newvalue.length === 0 && oldValue.length === 0)) {
@@ -191,8 +194,9 @@ export default {
         }
     },
     methods: {
-        toggleExpand(branchId, isHide, branchDepth) {
-            let temp = this.treeData;
+        toggleExpand(branchId, isHide) {
+            // isHide =true意为收起
+            let temp = [...this.treeData];
             const arr = [];
             for (let s = 0; s < temp.length; s++) {
                 if (temp[s].id !== branchId && temp[s].path.includes(branchId)) {
@@ -200,7 +204,7 @@ export default {
                         temp[s].hide = true;
                         temp[s].expand = true;
                     } else {
-                        if (temp[s].depth === branchDepth + 1) {
+                        if (temp[s].parentId === branchId) {
                             temp[s].hide = false;
                         }
                     }
@@ -325,7 +329,7 @@ export default {
                 id: 'root',
                 depth: 1,
                 path: 'root',
-                name: this.treeName,
+                name: this.treeTitle,
                 parentId: '',
                 expand: false,
                 hide: false,
@@ -385,9 +389,9 @@ export default {
         },
         multipleChangeChosed(isChosed, event) {
             const id = event.target.value;
-            const parentId = this.treeBranchIdMap[id].parentId;
             if (isChosed === true) {//如果选中，则选中的值时model数据的最后一个元素
                 // 查看与这个id有相同父元素的是否已经全部选中，若全部选中，则其父元素也应选中
+                const parentId = this.treeBranchIdMap[id].parentId;
                 const childrenIds = this.treeData.filter(v => v.parentId === parentId).map(a => a.id);
                 let shouldChoseParent = true;
                 for (let s = 0; s < childrenIds.length; s++) {
@@ -401,7 +405,9 @@ export default {
                 this.multipleChosed = [..._set];
             } else {
                 // 父级元素也不应该被选中
-                const shouldNotChose = this.treeData.filter(v => v.path.includes(id) || v.id === parentId);
+                // 寻找所有父元素
+                const parentIds = this.treeBranchIdMap[id].path.split('/');
+                const shouldNotChose = this.treeData.filter(v => v.path.includes(id) || parentIds.includes(v.id));
                 const _set = new Set([...this.multipleChosed]);
                 shouldNotChose.map(a => {
                     _set.delete(a.id);
