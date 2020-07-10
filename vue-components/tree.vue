@@ -93,11 +93,11 @@ export default {
                 pid: 'pid',//哪个字段表示每个树枝父级树枝的唯一性标识
                 name: 'name',//哪个字段表示每个树枝上显示的内容
                 single: false,//是否支持单选
-                singleChose: false,//单选是否默认开启
-                singleDefaultChosedId: '',//单选开始默认选中的值
+                singleInitChose: false,//组件初始单选是否默认开启
+                singleInitChosedId: '',//组件初始单选开启时默认选中的值
                 multiple: false,//是否支持多选
-                multipleChose: false,//多选是否默认开启
-                multipleDefaultChosedIds: [],//多选开启之后默认选中的值
+                multipleInitChose: false,//组件初始多选是否默认开启
+                multipleInitChosedIds: [],//组件初始多选开启时默认选中的值
                 operate: false,//是否开启树枝的删除，编辑，添加子级，导出操作
             }
         },
@@ -129,11 +129,11 @@ export default {
             keyword: '',
             waitForKeywordInputEndTimer: null,
             chose: {
-                single: this.option.single ? this.option.singleChose : false,
-                multiple: this.option.multiple ? this.option.multipleChose : false
+                single: this.option.single ? this.option.singleInitChose : false,
+                multiple: this.option.multiple ? this.option.multipleInitChose : false
             },
-            singleChosed: this.option.single && this.option.singleChose ? this.option.singleDefaultChosedId : '',
-            multipleChosed: this.option.multiple && this.option.multipleChose ? this.option.multipleDefaultChosedIds : [],
+            singleChosed: this.option.single && this.option.singleInitChose ? this.option.singleInitChosedId : '',
+            multipleChosed: this.option.multiple && this.option.multipleInitChose ? this.option.multipleInitChosedIds : [],
             // 交互辅助数据
             hover: '',
             operateBranchId: '',
