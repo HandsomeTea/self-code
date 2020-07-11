@@ -2,8 +2,13 @@
     <div class="tree_contain">
         <!-- 树顶的单选多选和关键字搜索框 -->
         <div class="tree_header">
-            <el-button type="primary" icon="el-icon-refresh" size="mini" class="plain_btn tree_header_refresh" title="重置" plain @click="resetChosed" />
             <input class="tree_header_input" type="text" v-model="keyword" placeholder="关键字搜索" />
+            <el-popover v-show="searchOption.length > 0" trigger="hover" placement="top" v-model="showSearchOption">
+                <div class="search_option_contain">
+                    <el-tag v-for="(text, i) in searchOption" :key="i" type="info" size="small">{{ text }}</el-tag>
+                </div>
+                <el-button type="primary" slot="reference" icon="el-icon-refresh" size="mini" class="plain_btn tree_header_refresh" title="点击重置" plain @click="resetChosed" />
+            </el-popover>
             <el-checkbox v-if="option.single" v-model="chose.single" size="mini" label="单选" />
             <el-checkbox v-if="option.multiple" v-model="chose.multiple" size="mini" label="多选" />
             <div style="clear:both"></div>
@@ -62,15 +67,16 @@
                         </span>
 
                         <!-- 是否允许树的操作 -->
-                        <template v-if="option.operate">
+                        <template v-if="chose.multiple || option.operate">
                             <el-dropdown v-if="hover === branch.id || operateBranchId === branch.id" trigger="click" @command="operateTree" @visible-change="toggleOperate">
                                 <i class="el-icon-link branch_operate_icon" @click="operateBranchId = branch.id" />
                                 <el-dropdown-menu slot="dropdown">
-                                    <el-dropdown-item :command="`${branch.id}:addchild`">添加子级</el-dropdown-item>
-                                    <el-dropdown-item v-if="branch.id !== 'root'" :command="`${branch.id}:edit`">重命名</el-dropdown-item>
-                                    <el-dropdown-item v-if="branch.id !== 'root'" :command="`${branch.id}:delete`">删除</el-dropdown-item>
-                                    <!-- <el-dropdown-item :command="`${branch.id}:import`">导入</el-dropdown-item> -->
-                                    <el-dropdown-item :command="`${branch.id}:export`">导出</el-dropdown-item>
+                                    <el-dropdown-item v-if="chose.multiple" :command="`${branch.id}:choseallchildren`">选中所有子部门</el-dropdown-item>
+                                    <el-dropdown-item v-if="chose.multiple" :command="`${branch.id}:notchoseallchildren`">不选所有子部门</el-dropdown-item>
+                                    <el-dropdown-item v-if="option.operate" :command="`${branch.id}:addchild`">添加子部门</el-dropdown-item>
+                                    <el-dropdown-item v-if="option.operate && branch.id !== 'root'" :command="`${branch.id}:edit`">重命名</el-dropdown-item>
+                                    <el-dropdown-item v-if="option.operate && branch.id !== 'root'" :command="`${branch.id}:delete`">删除</el-dropdown-item>
+                                    <el-dropdown-item v-if="option.operate" :command="`${branch.id}:export`">导出</el-dropdown-item>
                                 </el-dropdown-menu>
                             </el-dropdown>
                         </template>
@@ -123,8 +129,8 @@ export default {
              * hasChildren: false,是否有子级
              * data: {} 传入的每个树枝的原始数据
              */
-            treeTitle: this.treeName || this.$store.state.tenantSetting.tenantName,
             treeData: [],
+            treeTitle: this.treeName || this.$store.state.tenantSetting.tenantName,
             treeBranchIdMap: {},
             keyword: '',
             waitForKeywordInputEndTimer: null,
@@ -138,7 +144,28 @@ export default {
             hover: '',
             operateBranchId: '',
             clickedBranchId: '',
+            showSearchOption: false,
             active: +new Date()
+        }
+    },
+    computed: {
+        searchOption() {
+            const result = [];
+            if (this.keyword) {
+                result.push(`搜索关键字：${this.keyword}`);
+            }
+            if (this.clickedBranchId) {
+                result.push(this.treeBranchIdMap[this.clickedBranchId].name);
+            }
+            if (this.chose.single && this.singleChosed) {
+                result.push(this.treeBranchIdMap[this.singleChosed].name);
+            }
+            if (this.chose.multiple && this.multipleChosed.length > 0) {
+                this.treeData.filter(v => this.multipleChosed.includes(v.id)).map(a => {
+                    result.push(a.name);
+                });
+            }
+            return result;
         }
     },
     watch: {
@@ -352,26 +379,10 @@ export default {
                 const _rest = [];
                 let hasAlone = true;
                 for (let s = 0; s < formatData.length; s++) {
-                    let _index = null, findChildren = true;
-                    result.map((b, i) => {
-                        if (b.parentId === formatData[s].parentId) {
-                            _index = i;
-                        }
-                    });
-
-
-                    if (!_index) {
-                        findChildren = false;
-                        _index = result.findIndex(b => b.id === formatData[s].parentId);
-                    }
-
+                    const _index = result.findIndex(b => b.id === formatData[s].parentId);
                     if (_index > -1) {
-                        if (findChildren) {
-                            formatData[s].depth = result[_index].depth;
-                        } else {
-                            result[_index].hasChildren = true;
-                            formatData[s].depth = result[_index].depth + 1;
-                        }
+                        result[_index].hasChildren = true;
+                        formatData[s].depth = result[_index].depth + 1;
 
                         result.splice(_index + 1, 0, formatData[s]);
                         hasAlone = false;
@@ -397,6 +408,7 @@ export default {
             this.clickedBranchId = _branchId;
         },
         resetChosed() {
+            this.showSearchOption = false;
             this.keyword = '';
             this.clickedBranchId = '';
             if (this.option.single) {
@@ -412,29 +424,46 @@ export default {
             const id = event.target.value;
             if (isChosed === true) {//如果选中，则选中的值时model数据的最后一个元素
                 // 查看与这个id有相同父元素的是否已经全部选中，若全部选中，则其父元素也应选中
-                const parentId = this.treeBranchIdMap[id].parentId;
-                const childrenIds = this.treeData.filter(v => v.parentId === parentId).map(a => a.id);
-                let shouldChoseParent = true;
-                for (let s = 0; s < childrenIds.length; s++) {
-                    if (!this.multipleChosed.includes(childrenIds[s]) && childrenIds[s] !== id) {
-                        shouldChoseParent = false;
-                    }
-                }
-                // 对应的子级元素也应该都选中
-                const shouldChose = this.treeData.filter(v => v.path.includes(id) || (shouldChoseParent === true && v.id === parentId));
-                const _set = new Set([...this.multipleChosed, ...shouldChose.map(a => a.id)]);
-                this.multipleChosed = [..._set];
+                // const parentId = this.treeBranchIdMap[id].parentId;
+                // const childrenIds = this.treeData.filter(v => v.parentId === parentId).map(a => a.id);
+                // let shouldChoseParent = true;
+                // for (let s = 0; s < childrenIds.length; s++) {
+                //     if (!this.multipleChosed.includes(childrenIds[s]) && childrenIds[s] !== id) {
+                //         shouldChoseParent = false;
+                //     }
+                // }
+                // // 对应的子级元素也应该都选中
+                // const shouldChose = this.treeData.filter(v => v.path.includes(id) || (shouldChoseParent === true && v.id === parentId));
+                // const _set = new Set([...this.multipleChosed, ...shouldChose.map(a => a.id)]);
+                // this.multipleChosed = [..._set];
+                this.multipleChosed = [...new Set([...this.multipleChosed, id])];
             } else {
                 // 父级元素也不应该被选中
                 // 寻找所有父元素
-                const parentIds = this.treeBranchIdMap[id].path.split('/');
-                const shouldNotChose = this.treeData.filter(v => v.path.includes(id) || parentIds.includes(v.id));
+                // const parentIds = this.treeBranchIdMap[id].path.split('/');
+                // const shouldNotChose = this.treeData.filter(v => v.path.includes(id) || parentIds.includes(v.id));
+                // const _set = new Set([...this.multipleChosed]);
+                // shouldNotChose.map(a => {
+                //     _set.delete(a.id);
+                // })
+                // this.multipleChosed = [..._set];
                 const _set = new Set([...this.multipleChosed]);
-                shouldNotChose.map(a => {
-                    _set.delete(a.id);
-                })
+                _set.delete(id);
                 this.multipleChosed = [..._set];
             }
+        },
+        multipleChoseAllChildren(branchId) {
+            const tree = [...this.treeData];
+            const shouldChoseIds = tree.filter(v => v.path.includes(branchId) && v.id !== branchId).map(a => a.id);
+            this.multipleChosed = [...new Set([...this.multipleChosed, ...shouldChoseIds])];
+        },
+        multipleNotChoseAllChildren(branchId) {
+            const tree = [...this.treeData];
+            const _set = new Set([...this.multipleChosed]);
+            tree.filter(v => v.path.includes(branchId) && v.id !== branchId).map(a => {
+                _set.delete(a.id);
+            });
+            this.multipleChosed = [..._set];
         },
         operateTree(_command) {
             const [id, operate] = _command.split(':');
@@ -447,6 +476,10 @@ export default {
                 this.deleteBranch(this.treeBranchIdMap[id].data);
             } else if (operate === 'export') {
                 this.exportBranch(this.treeBranchIdMap[id].data);
+            } else if (operate === 'choseallchildren') {
+                this.multipleChoseAllChildren(id);
+            } else if (operate === 'notchoseallchildren') {
+                this.multipleNotChoseAllChildren(id);
             }
         },
         addChildBranch(_addedBranchData) {
@@ -559,7 +592,7 @@ export default {
     padding: 0 9px;
     line-height: 24px;
     height: 24px;
-    float: right;
+    float: left;
     background-color: #fff;
     background-image: none;
     border-radius: 6px;
@@ -576,6 +609,12 @@ export default {
 .tree_header_refresh {
     padding: 4px 10px;
     font-size: 14px;
+    float: right;
+}
+.search_option_contain {
+    max-width: 400px;
+    margin-top: -13px;
+    margin-left: -13px;
 }
 
 .tree_split {
