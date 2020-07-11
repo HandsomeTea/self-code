@@ -67,12 +67,12 @@
                         </span>
 
                         <!-- 是否允许树的操作 -->
-                        <template v-if="chose.multiple || option.operate">
+                        <template v-if="(branch.hasChildren && chose.multiple) || option.operate">
                             <el-dropdown v-if="hover === branch.id || operateBranchId === branch.id" trigger="click" @command="operateTree" @visible-change="toggleOperate">
                                 <i class="el-icon-link branch_operate_icon" @click="operateBranchId = branch.id" />
                                 <el-dropdown-menu slot="dropdown">
-                                    <el-dropdown-item v-if="chose.multiple" :command="`${branch.id}:choseallchildren`">选中所有子部门</el-dropdown-item>
-                                    <el-dropdown-item v-if="chose.multiple" :command="`${branch.id}:notchoseallchildren`">不选所有子部门</el-dropdown-item>
+                                    <el-dropdown-item v-if="branch.hasChildren && chose.multiple" :command="`${branch.id}:choseallchildren`">选中所有子部门</el-dropdown-item>
+                                    <el-dropdown-item v-if="branch.hasChildren && chose.multiple" :command="`${branch.id}:notchoseallchildren`">不选所有子部门</el-dropdown-item>
                                     <el-dropdown-item v-if="option.operate" :command="`${branch.id}:addchild`">添加子部门</el-dropdown-item>
                                     <el-dropdown-item v-if="option.operate && branch.id !== 'root'" :command="`${branch.id}:edit`">重命名</el-dropdown-item>
                                     <el-dropdown-item v-if="option.operate && branch.id !== 'root'" :command="`${branch.id}:delete`">删除</el-dropdown-item>
