@@ -682,7 +682,8 @@ export default {
     font-size: 13px;
 }
 .include_keyword {
-    color: #f56c6c;
+    /* color: #f56c6c; */
+    color: #606266;
 }
 
 .branch_extend_icon,
