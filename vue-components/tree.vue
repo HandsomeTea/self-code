@@ -618,7 +618,7 @@ export default {
 }
 
 .tree_split {
-    margin: 0 10px;
+    margin: 2px 10px 10px;
     width: calc(100% - 20px);
     background-color: #eff1f7;
 }
