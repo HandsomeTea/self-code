@@ -499,18 +499,9 @@ export default {
                     });
                 } else {
                     const tree = self.treeData.map(a => a);
-                    const childrenNum = tree.filter(v => v.parentId === _addedBranchData[self.option.id]).length;
                     let _index = tree.findIndex(v => v.id === _addedBranchData[self.option.id]);
                     tree[_index].hasChildren = true;
                     tree[_index].expand = false;
-                    if (childrenNum > 0) {
-                        tree.map((b, i) => {
-                            if (b.parentId === _addedBranchData[self.option.id]) {
-                                b.hide = false;
-                                _index = i;
-                            }
-                        });
-                    }
                     tree.splice(_index + 1, 0, {
                         id: newBranchData[self.option.id],
                         depth: self.treeBranchIdMap[_addedBranchData[self.option.id]].depth + 1,
