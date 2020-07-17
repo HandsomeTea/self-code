@@ -2,15 +2,16 @@
     <div class="tree_contain">
         <!-- 树顶的单选多选和关键字搜索框 -->
         <div class="tree_header">
-            <input class="tree_header_input" type="text" v-model="keyword" placeholder="关键字搜索" />
+            <el-checkbox v-if="single" v-model="chose.single" size="mini" label="单选" />
+            <el-checkbox v-if="multiple" v-model="chose.multiple" size="mini" label="多选" />
             <el-popover v-show="searchOption.length > 0" trigger="hover" placement="top" v-model="showSearchOption">
                 <div class="search_option_contain">
                     <el-tag v-for="(text, i) in searchOption" :key="i" type="info" size="small">{{ text }}</el-tag>
                 </div>
-                <el-button type="primary" slot="reference" icon="el-icon-refresh" size="mini" class="plain_btn tree_header_refresh" title="点击重置" plain @click="resetChosed" />
+                <!-- icon="el-icon-refresh" -->
+                <el-button type="primary" slot="reference" size="mini" class="plain_btn tree_header_refresh" title="点击重置" plain @click="resetChosed">重置</el-button>
             </el-popover>
-            <el-checkbox v-if="single" v-model="chose.single" size="mini" label="单选" />
-            <el-checkbox v-if="multiple" v-model="chose.multiple" size="mini" label="多选" />
+            <input class="tree_header_input" type="text" v-model="keyword" placeholder="关键字搜索" />
             <div style="clear:both"></div>
         </div>
 
@@ -71,8 +72,8 @@
                             <el-dropdown v-if="hover === branch.id || operateBranchId === branch.id" trigger="click" @command="operateTree" @visible-change="toggleOperate">
                                 <i class="el-icon-link branch_operate_icon" @click="operateBranchId = branch.id" />
                                 <el-dropdown-menu slot="dropdown">
-                                    <el-dropdown-item v-if="branch.hasChildren && chose.multiple" :command="`${branch.id}:choseallchildren`">选中所有子部门</el-dropdown-item>
-                                    <el-dropdown-item v-if="branch.hasChildren && chose.multiple" :command="`${branch.id}:notchoseallchildren`">不选所有子部门</el-dropdown-item>
+                                    <el-dropdown-item v-if="branch.hasChildren && chose.multiple" :command="`${branch.id}:choseallbranch`">全选该部门</el-dropdown-item>
+                                    <el-dropdown-item v-if="branch.hasChildren && chose.multiple" :command="`${branch.id}:notchoseallbranch`">取消全选</el-dropdown-item>
                                     <el-dropdown-item v-if="operate" :command="`${branch.id}:addchild`">添加子部门</el-dropdown-item>
                                     <el-dropdown-item v-if="operate && branch.id !== 'root'" :command="`${branch.id}:edit`">编辑</el-dropdown-item>
                                     <el-dropdown-item v-if="operate && branch.id !== 'root'" :command="`${branch.id}:delete`">删除</el-dropdown-item>
@@ -102,8 +103,6 @@ export default {
             default: () => {
                 return {
                     fullIdPathField: 'path',//哪个字段表示完整的层级路径
-                    id: 'id',//哪个字段表示每个树枝的唯一性标识
-                    pid: 'pid',//哪个字段表示每个树枝父级树枝的唯一性标识
                     name: 'name'//哪个字段表示每个树枝上显示的内容
                 }
             }
@@ -285,29 +284,22 @@ export default {
         }
     },
     methods: {
-        toggleExpand(branchId, isHide) {
-            // isHide =true意为收起
-            let temp = [...this.treeData];
-            const arr = [];
-            for (let s = 0; s < temp.length; s++) {
-                if (temp[s].id !== branchId && temp[s].path.includes(branchId)) {
-                    if (isHide === true) {
-                        temp[s].hide = true;
-                        temp[s].expand = true;
-                    } else {
-                        if (temp[s].parentId === branchId) {
-                            temp[s].hide = false;
-                        }
-                    }
-                }
-                if (temp[s].id === branchId) {
-                    temp[s].expand = isHide;
-                }
-                arr.push(temp[s]);
+        /**根据每个树枝的原始数据生成标准树枝的数据 */
+        getBranchFormatData(_branch) {
+            const pathSplit = _branch[this.option.fullIdPathField].split('/');
+            const id = pathSplit[pathSplit.length - 1];
+            const parentId = pathSplit[pathSplit.length - 2] || 'root';
+            const path = `root/${pathSplit.filter(a => !!a).join('/')}`;
+            return {
+                id,
+                parentId,
+                name: _branch[this.option.name],
+                path,
+                depth: path.split('/').length,
+                sort: this.treeSort.enabled && _branch[this.treeSort.by] && parseInt(_branch[this.treeSort.by]) ? parseInt(_branch[this.treeSort.by]) : 1
             }
-            this.treeData = arr;
-            this.active = +new Date()
         },
+        /**根据原始的树的数据生成符合条件的树数据 */
         generateTreeFormatData() {
             const sourceData = [...this.sourceData];
             const keyword = this.keyword;
@@ -321,31 +313,36 @@ export default {
             let matchKeywordIds = new Set();
             if (keyword) {
                 sourceData.map(branch => {
-                    if (branch[this.option.name].includes(keyword)) {
-                        matchKeywordIds.add(branch[this.option.id])
+                    const { id, name } = this.getBranchFormatData(branch);
+                    if (name.includes(keyword)) {
+                        matchKeywordIds.add(id)
                     }
                 });
                 let matchKeywordChildrenIds = new Set();
                 for (const id of matchKeywordIds) {
-                    const matchKeywordChildren = sourceData.filter(v => v[this.option.fullIdPathField].includes(id))
-                    matchKeywordChildrenIds = new Set([...matchKeywordChildrenIds, ...matchKeywordChildren.map(a => a[this.option.id])]);
+                    const matchKeywordChildren = sourceData.filter(v => {
+                        const { path } = this.getBranchFormatData(v);
+                        return path.includes(id)
+                    })
+
+                    matchKeywordChildrenIds = new Set([...matchKeywordChildrenIds, ...matchKeywordChildren.map(branch => this.getBranchFormatData(branch).id)]);
                 }
                 matchKeywordIds = new Set([...matchKeywordIds, ...matchKeywordChildrenIds]);
             }
             sourceData.map(branch => {
-                if (branch[this.option.fullIdPathField] && branch[this.option.id] && branch[this.option.pid] && branch[this.option.name] && !allBranchId.has(branch[this.option.id])) {
-                    if (!keyword || matchKeywordIds.has(branch[this.option.id])) {
-                        const pathArr = branch[this.option.fullIdPathField].split('/').filter(iteam => !!iteam);
+                const { id, parentId, path, depth, sort, name } = this.getBranchFormatData(branch);
+                if (path && id && parentId && name && !allBranchId.has(id)) {
+                    if (!keyword || matchKeywordIds.has(id)) {
                         const _obj = {
-                            id: branch[this.option.id],
-                            depth: pathArr.length + 1,
-                            path: `root/${pathArr.join('/')}`,
-                            name: branch[this.option.name],
-                            parentId: branch[this.option.pid].replace('/', ''),
+                            id,
+                            depth,
+                            path,
+                            name,
+                            parentId,
                             expand: true,
                             hide: true,
                             hasChildren: false,
-                            sort: this.treeSort.enabled && branch[this.treeSort.by] && parseInt(branch[this.treeSort.by]) ? parseInt(branch[this.treeSort.by]) : 1,
+                            sort,
                             data: branch
                         }
 
@@ -357,7 +354,7 @@ export default {
                         }
 
                         _formatData.push(_obj);
-                        allBranchId.add(branch[this.option.id]);
+                        allBranchId.add(id);
                     }
                 }
             });
@@ -394,6 +391,7 @@ export default {
                 formatData
             }
         },
+        /**生成经过排序字段排序的树 */
         generateTreeSortData() {
             const { root, rootChildren, formatData } = this.generateTreeFormatData();
             /**最后组装数据使用 */
@@ -466,6 +464,7 @@ export default {
 
             return result;
         },
+        /**生成?没有经过排序字段排序的树 */
         generateTreeWithoutSortData() {
             const initTreeData = this.generateTreeFormatData();
 
@@ -502,6 +501,7 @@ export default {
 
             return result;
         },
+        /**最终生成树图 */
         generateTreeData() {
             let result = [];
             if (this.treeSort.enabled) {
@@ -535,11 +535,37 @@ export default {
             }
             return result;
         },
+        /**树的展开和收起 */
+        toggleExpand(branchId, isHide) {
+            // isHide =true意为收起
+            let temp = [...this.treeData];
+            const arr = [];
+            for (let s = 0; s < temp.length; s++) {
+                if (temp[s].id !== branchId && temp[s].path.includes(branchId)) {
+                    if (isHide === true) {
+                        temp[s].hide = true;
+                        temp[s].expand = true;
+                    } else {
+                        if (temp[s].parentId === branchId) {
+                            temp[s].hide = false;
+                        }
+                    }
+                }
+                if (temp[s].id === branchId) {
+                    temp[s].expand = isHide;
+                }
+                arr.push(temp[s]);
+            }
+            this.treeData = arr;
+            this.active = +new Date()
+        },
+        /**判断树枝是否可以向上移动 */
         canMoveUp(branchId, branchPid) {
             const _index = [...this.treeData].findIndex(v => v.id === branchId);
             const aheadBranch = [...this.treeData].filter((value, i) => i < _index);
             return aheadBranch.filter(v => v.parentId === branchPid).length > 0;
         },
+        /**判断树枝是否可以向下移动 */
         canMoveDown(branchId, branchPid) {
             const _index = [...this.treeData].findIndex(v => v.id === branchId);
             const afterBranch = [...this.treeData].filter((value, i) => i > _index);
@@ -553,6 +579,7 @@ export default {
         clickBranch(_branchId) {
             this.clickedBranchId = _branchId;
         },
+        /**重置树的选中及搜索状态 */
         resetChosed() {
             this.showSearchOption = false;
             this.keyword = '';
@@ -566,6 +593,7 @@ export default {
                 this.multipleChosed = [];
             }
         },
+        /**树的多选 */
         multipleChangeChosed(isChosed, event) {
             const id = event.target.value;
             if (isChosed === true) {//如果选中，则选中的值时model数据的最后一个元素
@@ -598,19 +626,22 @@ export default {
                 this.multipleChosed = [..._set];
             }
         },
+        /**树的多选 */
         multipleChoseAllChildren(branchId) {
             const tree = [...this.treeData];
-            const shouldChoseIds = tree.filter(v => v.path.includes(branchId) && v.id !== branchId).map(a => a.id);
+            const shouldChoseIds = tree.filter(v => v.path.includes(branchId)).map(a => a.id);
             this.multipleChosed = [...new Set([...this.multipleChosed, ...shouldChoseIds])];
         },
+        /**取消多选 */
         multipleNotChoseAllChildren(branchId) {
             const tree = [...this.treeData];
             const _set = new Set([...this.multipleChosed]);
-            tree.filter(v => v.path.includes(branchId) && v.id !== branchId).map(a => {
+            tree.filter(v => v.path.includes(branchId)).map(a => {
                 _set.delete(a.id);
             });
             this.multipleChosed = [..._set];
         },
+        /**树的操作 */
         operateTree(_command) {
             const [id, operate] = _command.split(':');
             this.operateBranchId = '';
@@ -622,9 +653,9 @@ export default {
                 this.deleteBranch(this.treeBranchIdMap[id].data);
             } else if (operate === 'export') {
                 this.exportBranch(this.treeBranchIdMap[id].data);
-            } else if (operate === 'choseallchildren') {
+            } else if (operate === 'choseallbranch') {
                 this.multipleChoseAllChildren(id);
-            } else if (operate === 'notchoseallchildren') {
+            } else if (operate === 'notchoseallbranch') {
                 this.multipleNotChoseAllChildren(id);
             } else if (operate === 'up') {
                 this.setPosition(this.treeBranchIdMap[id].data, operate);
@@ -633,7 +664,7 @@ export default {
             }
         },
         setPosition(_branchData, action) {
-            const currentId = _branchData[this.option.id];
+            const currentId = this.getBranchFormatData(_branchData).id;
             const tree = [...this.treeData];
             const shouldMoveData = tree.filter(v => v.path.includes(currentId));
             const currentIndex = tree.findIndex(v => v.id === currentId);
@@ -677,12 +708,13 @@ export default {
         addChildBranch(_addedBranchData) {
             const self = this;
             const addSuccess = newBranchData => {
+                const newData = self.getBranchFormatData(newBranchData);
                 if (Object.keys(_addedBranchData).length === 0) {//树根
                     self.treeData.push({
-                        id: newBranchData[self.option.id],
+                        id: newData.id,
                         depth: 2,
-                        path: `root/${newBranchData[self.option.fullIdPathField].split('/').filter(iteam => !!iteam).join('/')}`,
-                        name: newBranchData[self.option.name],
+                        path: newData.path,
+                        name: newData.name,
                         parentId: 'root',
                         expand: true,
                         hide: false,
@@ -690,16 +722,17 @@ export default {
                         data: newBranchData
                     });
                 } else {
+                    const addData = self.getBranchFormatData(_addedBranchData);
                     const tree = self.treeData.map(a => a);
-                    let _index = tree.findIndex(v => v.id === _addedBranchData[self.option.id]);
+                    let _index = tree.findIndex(v => v.id === addData.id);
                     tree[_index].hasChildren = true;
                     tree[_index].expand = false;
                     tree.splice(_index + 1, 0, {
-                        id: newBranchData[self.option.id],
-                        depth: self.treeBranchIdMap[_addedBranchData[self.option.id]].depth + 1,
-                        path: `${self.treeBranchIdMap[_addedBranchData[self.option.id]].path}/${newBranchData[self.option.id]}`,
-                        name: newBranchData[self.option.name],
-                        parentId: _addedBranchData[self.option.id],
+                        id: newData.id,
+                        depth: self.treeBranchIdMap[addData.id].depth + 1,
+                        path: `${self.treeBranchIdMap[addData.id].path}/${newData.id}`,
+                        name: newData.name,
+                        parentId: addData.id,
                         expand: true,
                         hide: false,
                         hasChildren: false,
@@ -713,9 +746,10 @@ export default {
         renameBranch(_branchData) {
             const self = this;
             const renameSuccess = newBranchData => {
+                const { id, name } = self.getBranchFormatData(newBranchData);
                 for (let s = 0; s < self.treeData.length; s++) {
-                    if (self.treeData[s].id === newBranchData[self.option.id]) {
-                        self.treeData[s].name = newBranchData[self.option.name];
+                    if (self.treeData[s].id === id) {
+                        self.treeData[s].name = name;
                         break;
                     }
                 }
@@ -725,12 +759,13 @@ export default {
         deleteBranch(_branchData) {
             const self = this;
             const deleteSuccess = () => {
-                let tree = self.treeData.map(a => a);;
-                const childrenNum = tree.filter(v => v.parentId === _branchData[self.option.pid]).length;
-                tree = tree.filter(v => !v.path.includes(_branchData[self.option.id]));
+                let tree = [...self.treeData];
+                const { parentId, id } = self.getBranchFormatData(_branchData);
+                const childrenNum = tree.filter(v => v.parentId === parentId).length;
+                tree = tree.filter(v => !v.path.includes(id));
                 if (childrenNum === 1) {
                     for (let s = 0; s < tree.length; s++) {
-                        if (tree[s].id === _branchData[self.option.pid]) {
+                        if (tree[s].id === parentId) {
                             tree[s].hasChildren = false;
                             break;
                         }
@@ -767,7 +802,7 @@ export default {
 .tree_header .el-checkbox {
     margin-top: 3px;
     margin-right: 10px;
-    float: right;
+    float: left;
 }
 
 .tree_header_input {
@@ -775,7 +810,7 @@ export default {
     padding: 0 9px;
     line-height: 24px;
     height: 24px;
-    float: left;
+    float: right;
     background-color: #fff;
     background-image: none;
     border-radius: 6px;
@@ -790,9 +825,10 @@ export default {
     border-color: #409eff;
 }
 .tree_header_refresh {
-    padding: 4px 10px;
-    font-size: 14px;
-    float: right;
+    padding: 3px 7px;
+    font-size: 12px;
+    float: left;
+    margin-top: 3px;
 }
 .search_option_contain {
     max-width: 400px;
