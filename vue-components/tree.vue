@@ -447,8 +447,10 @@ export default {
                 belongMap = { ...belongMap, ...map2[key] }
             }
 
-            for (const key in belongMap) {
-                belongMap[key] = this.treeSort.rule === 'down' ? belongMap[key].sort((a, b) => a.sort - b.sort) : belongMap[key].sort((a, b) => b.sort - a.sort)
+            if (this.treeSort.enabled) {
+                for (const key in belongMap) {
+                    belongMap[key] = this.treeSort.rule === 'down' ? belongMap[key].sort((a, b) => a.sort - b.sort) : belongMap[key].sort((a, b) => b.sort - a.sort)
+                }
             }
 
             // 开始组装数据
@@ -464,51 +466,34 @@ export default {
 
             return result;
         },
-        /**生成?没有经过排序字段排序的树 */
-        generateTreeWithoutSortData() {
-            const initTreeData = this.generateTreeFormatData();
-
-            /* 开始拼装树的数据 */
-            let result = [];
-            // 寻找一级树(两种情况：深度最小的树枝，其path不包含其他所有树枝数据的path的树枝，这两种情况即allBranchId没有其parentId的情况)
-            const rootBranch = initTreeData.root;
-            const secondLevelBranch = initTreeData.rootChildren;
-            let formatData = initTreeData.formatData;
-            result = [rootBranch, ...secondLevelBranch];
-
-            // 处理所有能通过parentId找到父级的树枝(有些树的中间层级原始数据是断的)
-            const dealWithParentId = () => {
-                const _rest = [];
-                let hasAlone = true;
-                for (let s = 0; s < formatData.length; s++) {
-                    const _index = result.findIndex(b => b.id === formatData[s].parentId);
-                    if (_index > -1) {
-                        result[_index].hasChildren = true;
-                        formatData[s].depth = result[_index].depth + 1;
-
-                        result.splice(_index + 1, 0, formatData[s]);
-                        hasAlone = false;
-                    } else {
-                        _rest.push(formatData[s]);
-                    }
-                }
-                formatData = _rest;
-                if (hasAlone === false) {
-                    dealWithParentId();
+        generateChildrenData() {
+            const { root, rootChildren, formatData } = this.generateTreeFormatData();
+            const dataList = [...rootChildren, ...formatData, root].sort((a, b) => a.path.split('/').length - b.path.split('/').length);
+            const allPath = new Set();
+            const result = {};
+            for (let s = 0; s < dataList.length; s++) {
+                const { path, id, depth } = dataList[s];
+                allPath.add(path);
+                dataList[s].children = {};
+                if (path === 'root') {
+                    result.root = dataList[s];
+                } else {
+                    eval(`result${path.replace(`/${id}`, '').split('/').map(a => `["${a}"]`).join('.children')}.children["${id}"] = dataList[s]`);
                 }
             }
-            dealWithParentId();
 
-            return result;
+            const loopPath = [...allPath].sort((a, b) => a.split('/').length - b.split('/').length).reverse();
+
+            for (let s = 0; s < loopPath.length; s++) {
+                const varPath = loopPath[s].split('/').map(a => `["${a}"]`).join('.children');
+                eval(`result${varPath}.children = Object.values(result${varPath}.children).sort((a,b)=>a.sort - b.sort)`)
+            }
+            return Object.values(result);
         },
         /**最终生成树图 */
         generateTreeData() {
-            let result = [];
-            if (this.treeSort.enabled) {
-                result = this.generateTreeSortData();
-            } else {
-                result = this.generateTreeWithoutSortData();
-            }
+            this.generateChildrenData();
+            let result = this.generateTreeSortData();
 
             if (this.isInited === true) {//如果是初始化，展开单选/多选赋的初始值
                 let shouldUnfoldIds = new Set();
