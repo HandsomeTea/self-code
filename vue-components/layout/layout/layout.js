@@ -87,7 +87,7 @@ export default {
             _windowsList.push({
                 windowGroupId: sureField(`order${window.order}`, 'windowGroupId') || uuidv4(),
                 type: sureField(`order${window.order}`, 'type') || 'AUTO',
-                loopInterval: sureField(`order${window.order}`, 'loopInterval') || '15000',
+                loopInterval: `${sureField(`order${window.order}`, 'loopInterval')}` || '15000',
                 windows: {
                     windowId: sureField(`order${window.order}`, 'windows[0]', 'windowId') || uuidv4(),
                     location: window
@@ -139,15 +139,15 @@ export default {
                 userId,
                 meetingRoomDevice,
                 endpointType,
-                dispUserName,
                 username,
+                deviceName,
                 name
             } = userOrDevice;
             let _name = null;
             if (userId && !externalDeviceId) { //user
-                _name = dispUserName || username || name;
+                _name = name || username;
             } else if (userId && externalDeviceId && !meetingRoomDevice) {//user device
-                _name = `${dispUserName || username || name}的${endpointType}`;
+                _name = deviceName;
             } else if (deviceId || externalDeviceId && meetingRoomDevice) {//hard device
                 _name = `设备${deviceId || externalDeviceId}`;
             }

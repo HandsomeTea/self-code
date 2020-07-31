@@ -11,8 +11,8 @@
                 <!-- icon="el-icon-refresh" -->
                 <el-button type="primary" slot="reference" size="mini" class="plain_btn tree_header_refresh" title="点击重置" plain @click="resetChosed">重置</el-button>
             </el-popover>
-            <input class="tree_header_input" type="text" v-model="keyword" placeholder="关键字搜索" />
-            <div style="clear:both"></div>
+            <input class="tree_header_input" type="text" v-model="keyword" placeholder="关键字搜索" clearable />
+            <div style="clear: both;"></div>
         </div>
 
         <!-- 分割线 -->
@@ -75,6 +75,7 @@
                                     <el-dropdown-item v-if="branch.hasChildren && chose.multiple" :command="`${branch.id}:choseallbranch`">全选该部门</el-dropdown-item>
                                     <el-dropdown-item v-if="branch.hasChildren && chose.multiple" :command="`${branch.id}:notchoseallbranch`">取消全选</el-dropdown-item>
                                     <el-dropdown-item v-if="operate" :command="`${branch.id}:addchild`">添加子部门</el-dropdown-item>
+                                    <el-dropdown-item v-if="operate" :command="`${branch.id}:changeparent`">更换父部门</el-dropdown-item>
                                     <el-dropdown-item v-if="operate && branch.id !== 'root'" :command="`${branch.id}:edit`">编辑</el-dropdown-item>
                                     <el-dropdown-item v-if="operate && branch.id !== 'root'" :command="`${branch.id}:delete`">删除</el-dropdown-item>
                                     <el-dropdown-item v-if="operate && branch.id !== 'root' && canMoveUp(branch.id, branch.parentId) === true" :command="`${branch.id}:up`">
@@ -83,12 +84,12 @@
                                     <el-dropdown-item v-if="operate && branch.id !== 'root' && canMoveDown(branch.id, branch.parentId) === true" :command="`${branch.id}:down`">
                                         向下移动(同级)
                                     </el-dropdown-item>
-                                    <el-dropdown-item v-if="operate" :command="`${branch.id}:export`">导出</el-dropdown-item>
+                                    <el-dropdown-item v-if="operate" :command="`${branch.id}:export`">导出部门</el-dropdown-item>
                                 </el-dropdown-menu>
                             </el-dropdown>
                         </template>
                     </div>
-                    <div style="clear:both"></div>
+                    <div style="clear: both;"></div>
                 </div>
             </el-collapse-transition>
         </div>
@@ -468,31 +469,40 @@ export default {
         },
         generateChildrenData() {
             const { root, rootChildren, formatData } = this.generateTreeFormatData();
-            const dataList = [...rootChildren, ...formatData, root].sort((a, b) => a.path.split('/').length - b.path.split('/').length);
+            rootChildren.map(a => {
+                const pathSplit = a.path.split('/');
+                a.parentId = pathSplit[pathSplit.length - 2]
+            });
+            const dataList = [...rootChildren, ...formatData].sort((a, b) => b.path.split('/').length - a.path.split('/').length);
             const allPath = new Set();
+            let allPid = new Set();
             const result = {};
             for (let s = 0; s < dataList.length; s++) {
-                const { path, id, depth } = dataList[s];
-                allPath.add(path);
-                dataList[s].children = {};
-                if (path === 'root') {
-                    result.root = dataList[s];
-                } else {
-                    eval(`result${path.replace(`/${id}`, '').split('/').map(a => `["${a}"]`).join('.children')}.children["${id}"] = dataList[s]`);
+                delete dataList[s].depth;
+                result[dataList[s].id] = dataList[s];
+                allPid.add(dataList[s].parentId);
+            }
+            const loopFn = () => {
+                const resultKeys = Object.keys(result).length;
+                for (const key in result) {
+                    if (!allPid.has(key) && result[result[key].parentId]) {
+                        if (!result[result[key].parentId].children) {
+                            result[result[key].parentId].children = [];
+                        }
+                        result[result[key].parentId].children = [...result[result[key].parentId].children, result[key]]
+                        delete result[key];
+                    }
+                }
+                allPid = new Set([...Object.values(result).map(a => a.parentId)]);
+                if (Object.keys(result).length !== resultKeys) {
+                    loopFn();
                 }
             }
-
-            const loopPath = [...allPath].sort((a, b) => a.split('/').length - b.split('/').length).reverse();
-
-            for (let s = 0; s < loopPath.length; s++) {
-                const varPath = loopPath[s].split('/').map(a => `["${a}"]`).join('.children');
-                eval(`result${varPath}.children = Object.values(result${varPath}.children).sort((a,b)=>a.sort - b.sort)`)
-            }
-            return Object.values(result);
+            loopFn();
+            return [{ ...root, children: Object.values(result) }];
         },
         /**最终生成树图 */
         generateTreeData() {
-            this.generateChildrenData();
             let result = this.generateTreeSortData();
 
             if (this.isInited === true) {//如果是初始化，展开单选/多选赋的初始值
@@ -646,6 +656,8 @@ export default {
                 this.setPosition(this.treeBranchIdMap[id].data, operate);
             } else if (operate === 'down') {
                 this.setPosition(this.treeBranchIdMap[id].data, operate);
+            } else if (operate === 'changeparent') {
+                this.moveBranch(this.treeBranchIdMap[id].data, operate);
             }
         },
         setPosition(_branchData, action) {
@@ -668,21 +680,22 @@ export default {
             }
             const self = this;
             const setLocationSuccess = () => {
-                if (action === 'down') {
-                    tree.splice(currentIndex, shouldMoveData.length);
-                    let _index = null;
-                    tree.map((a, i) => {
-                        if (a.path.includes(nextSameLevelId)) {
-                            _index = i;
-                        }
-                    })
-                    tree.splice(_index + 1, 0, ...shouldMoveData);
-                } else {
-                    const preSameLevelIndex = tree.findIndex(v => v.id === preSameLevelId);
-                    tree.splice(currentIndex, shouldMoveData.length);
-                    tree.splice(preSameLevelIndex, 0, ...shouldMoveData);
-                }
-                self.treeData = tree;
+                tree.splice(currentIndex, shouldMoveData.length);
+                setTimeout(() => {
+                    if (action === 'down') {
+                        let _index = null;
+                        tree.map((a, i) => {
+                            if (a.path.includes(nextSameLevelId)) {
+                                _index = i;
+                            }
+                        })
+                        tree.splice(_index + 1, 0, ...shouldMoveData);
+                    } else {
+                        const preSameLevelIndex = tree.findIndex(v => v.id === preSameLevelId);
+                        tree.splice(preSameLevelIndex, 0, ...shouldMoveData);
+                    }
+                    self.treeData = tree;
+                }, 500);
             }
             if (action === 'down') {
                 this.$emit('down-branch', _branchData, this.treeBranchIdMap[nextSameLevelId].data, setLocationSuccess);
@@ -694,8 +707,9 @@ export default {
             const self = this;
             const addSuccess = newBranchData => {
                 const newData = self.getBranchFormatData(newBranchData);
+                let _new = {};
                 if (Object.keys(_addedBranchData).length === 0) {//树根
-                    self.treeData.push({
+                    _new = {
                         id: newData.id,
                         depth: 2,
                         path: newData.path,
@@ -705,14 +719,15 @@ export default {
                         hide: false,
                         hasChildren: false,
                         data: newBranchData
-                    });
+                    };
+                    self.treeData.push(_new);
                 } else {
                     const addData = self.getBranchFormatData(_addedBranchData);
                     const tree = self.treeData.map(a => a);
                     let _index = tree.findIndex(v => v.id === addData.id);
                     tree[_index].hasChildren = true;
                     tree[_index].expand = false;
-                    tree.splice(_index + 1, 0, {
+                    _new = {
                         id: newData.id,
                         depth: self.treeBranchIdMap[addData.id].depth + 1,
                         path: `${self.treeBranchIdMap[addData.id].path}/${newData.id}`,
@@ -722,8 +737,17 @@ export default {
                         hide: false,
                         hasChildren: false,
                         data: newBranchData
-                    });
+                    };
+                    tree.splice(_index + 1, 0, _new);
                     self.treeData = tree;
+                }
+                self.treeBranchIdMap[_new.id] = _new;
+                if (self.single && self.chose.single) {
+                    self.singleChosed = _new.id;
+                } else if (self.multiple && self.chose.multiple) {
+                    self.multipleChosed.push(_new.id);
+                } else {
+                    self.clickedBranchId = _new.id
                 }
             }
             this.$emit('add-child', _addedBranchData, addSuccess);
@@ -759,6 +783,9 @@ export default {
                 self.treeData = tree;
             }
             this.$emit('delete-branch', _branchData, deleteSuccess);
+        },
+        moveBranch(_branchData) {
+            this.$emit('move-branch', _branchData);
         },
         exportBranch(_branchData) {
             this.$emit('export-branch', _branchData);

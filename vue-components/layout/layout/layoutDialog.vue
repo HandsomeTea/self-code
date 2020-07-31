@@ -1,5 +1,5 @@
 <template>
-    <div>
+    <div class="dialog_contain">
         <!-- 选择固定显示的会议人员的对话框 -->
         <el-dialog
             :title="`为No.${operateWindow.windows && operateWindow.windows.location.order}选择显示内容`"

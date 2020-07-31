@@ -1,7 +1,7 @@
 <template>
-    <el-main style="padding-top:6px;" id="mettingLayout">
+    <el-main style="padding-top: 6px;" id="mettingLayout">
         <template v-if="isFromMettingTemplate">
-            <el-link type="primary" class="metting_template_title" :underline="false" @click="redirectToMettingTemplateList"> <i class="el-icon-back"></i> 模板列表 </el-link>
+            <el-page-header style="margin-top: 10px;" @back="redirectToMettingTemplateList" title="模板列表" :content="templateName" />
             <el-divider></el-divider>
         </template>
 
@@ -59,15 +59,15 @@
 
         <!-- 布局设置的升序/降序/删除 -->
         <el-collapse-transition v-for="(_layout, b) in layoutRuleList" :key="b">
-            <div v-if="already" style="margin-top:10px;transition: all 0.2s;">
+            <div v-if="already" style="margin-top: 10px; transition: all 0.2s;">
                 <span class="layout_iteam_order_btn" :markss="_layout.layoutId" @click="changeLayoutSettingLevel(_layout.layoutId, -1)">
-                    <i class="el-icon-sort-down" style="font-weight:600;"></i>
+                    <i class="el-icon-sort-down" style="font-weight: 600;"></i>
                 </span>
                 <span class="layout_iteam_order_btn" :markss="_layout.layoutId + -1" @click="changeLayoutSettingLevel(_layout.layoutId)">
-                    <i class="el-icon-sort-up" style="font-weight:600;"></i>
+                    <i class="el-icon-sort-up" style="font-weight: 600;"></i>
                 </span>
                 <span class="layout_iteam_order_btn" @click="deleteLayoutSetting(_layout.layoutId)">
-                    <i class="el-icon-delete" style="font-weight:600;"></i>
+                    <i class="el-icon-delete" style="font-weight: 600;"></i>
                 </span>
                 <!-- layout_iteam_editing -->
                 <div :class="['layout_iteam', { layout_iteam_editing: currentLayoutData.layoutId && _layout.layoutId === currentLayoutData.layoutId }]">
@@ -91,7 +91,7 @@
                         </p>
                     </el-tooltip>
                 </div>
-                <div style="clear:both;"></div>
+                <div style="clear: both;"></div>
             </div>
         </el-collapse-transition>
 
@@ -118,9 +118,20 @@
 
         <!-- 指定应用与会人员的对话框 -->
         <el-dialog title="选择应用人员" :visible.sync="isChosePartmentMember" width="640px" :close-on-click-modal="false" :close-on-press-escape="false">
+            <div style="margin-bottom: 8px;">
+                <el-checkbox v-model="choseByDepartment" border size="mini">按照部门层级选择</el-checkbox>
+            </div>
             <el-cascader-panel
+                v-show="choseByDepartment"
                 ref="chosePartmentMemberCascader"
                 :options="conferenceMemberTreeData"
+                v-model="useListModel"
+                :props="{ emitPath: false, multiple: true }"
+            ></el-cascader-panel>
+            <el-cascader-panel
+                v-show="!choseByDepartment"
+                ref="chosePartmentMemberCascader1"
+                :options="conferenceMemberTileData"
                 v-model="useListModel"
                 :props="{ emitPath: false, multiple: true }"
             ></el-cascader-panel>
@@ -164,6 +175,7 @@ export default {
         return {
             isFromMettingTemplate: this.$route.query.f === 't',
             conferenceId: this.$route.query.id,
+            templateName: '',
             conferenceInProgress: false,
             already: false,//初始化数据是否全部加载完毕
             // 布局相关源数据 ==============================================================================布局相关源数据
@@ -247,6 +259,7 @@ export default {
             useType: 'allmember',//将布局以什么方式应用(全局，个人，选定人)
             useList: [],//应用到的选定人的列表
             useListModel: [],//当再次编选择应用与会人员的数据时，显示已经选中的树节点而使用的数据，别无他用，是elementUI框架自己需要的格式，不需要关心
+            choseByDepartment: false,//是否按部门选择
 
             // 设置好的布局数据，也是最终提交需要的数据
             screenSettingData: {},
@@ -360,6 +373,7 @@ export default {
                 }
 
             }).catch(e => {
+                console.log(e);
                 loading.close();
                 return this.$message.error("数据初始化失败！");
             });
@@ -399,6 +413,7 @@ export default {
             }
 
             _obj[this.$store.state.user.userId] = {
+                userId: this.$store.state.user.userId,
                 dispUserName: this.$store.state.user.me.name || this.$store.state.user.me.username
             }
             this.conferenceMemberMap = _obj;
@@ -422,6 +437,7 @@ export default {
                     this.already = true;
                     loading.close();
                 }).catch(e => {
+                    console.log(e);
                     loading.close();
                     return this.$message.error("数据初始化失败！");
                 });
@@ -433,8 +449,10 @@ export default {
         },
         getMettingTemplate(loading) {
             this.getapi(`/api/surpassadm/confmgr/2.0/conference/template/${this.conferenceId}`, {}).then(res => {
+                this.templateName = res.data.data.title;
                 this.dealWithConferenceData(res.data.data, loading);
             }).catch(e => {
+                console.log(e);
                 loading.close();
                 return this.$message.error("数据初始化失败！");
             });
@@ -445,6 +463,7 @@ export default {
                 .then(res => {
                     this.dealWithConferenceData(res.data.data, loading);
                 }).catch(e => {
+                    console.log(e);
                     loading.close();
                     return this.$message.error("数据初始化失败！");
                 });
@@ -462,15 +481,15 @@ export default {
                 userId,
                 meetingRoomDevice,
                 endpointType,
-                dispUserName,
+                deviceName,
                 username,
                 name
             } = userOrDevice;
             let _name = null;
             if (userId && !externalDeviceId) { //user
-                _name = dispUserName || username || name;
+                _name = name || username;
             } else if (!meetingRoomDevice && userId && externalDeviceId) {//user device
-                _name = `${dispUserName || username || name}的${endpointType}`;
+                _name = deviceName;
             } else if (meetingRoomDevice && deviceId || externalDeviceId) {//hard device
                 _name = `设备${deviceId || externalDeviceId}`;
             }
@@ -494,8 +513,10 @@ export default {
 
             // 会议正在进行时，在线的人员和设备处理
             for (let s = 0; s < onlineDeviceData.length; s++) {
-                onlineDeviceData[s].isOnlineMember = true;
-                userIdAndDeviceIdToDetailMap[onlineDeviceData[s].externalDeviceId] = onlineDeviceData[s];
+                if (onlineDeviceData[s].connection === true) {
+                    onlineDeviceData[s].isOnlineMember = true;
+                    userIdAndDeviceIdToDetailMap[onlineDeviceData[s].externalDeviceId] = onlineDeviceData[s];
+                }
             }
             // userIdAndDeviceIdToDetailMap = {
             //     'eeb912225fd01cf35d33120a': {//user
@@ -532,13 +553,13 @@ export default {
                     userId,
                     departmentId,
                     endpointType,
-                    dispUserName,
+                    deviceName,
                     username,
                     name,
                     isOnlineMember,
                     meetingRoomDevice
                 } = userIdAndDeviceIdToDetailMap[key];
-                const userDisplayName = dispUserName || username || name;
+                const userDisplayName = name || username;
                 const hardDeviceDisplayName = `设备${deviceId || externalDeviceId}`;
                 /**
                  * 会议正在进行时人/设备是否在线
@@ -572,8 +593,8 @@ export default {
                             id: externalDeviceId,
                             value: externalDeviceId,
                             branchType: 'personalDevice',
-                            label: `${userDisplayName}的${endpointType}`,// 组件显示使用
-                            name: `${userDisplayName}的${endpointType}`,// 选中的人使用
+                            label: deviceName,// 组件显示使用
+                            name: deviceName,// 选中的人使用
                             ...status
                         }
                     } else if (!externalDeviceId) {// 只有用户(会议还没开始)
@@ -596,7 +617,7 @@ export default {
                      **/
                     if (userDevice) {
                         if (userIdAndDeviceIdToDetailMap[userId]) {
-                            const _userDisplayName = userIdAndDeviceIdToDetailMap[userId].dispUserName || userIdAndDeviceIdToDetailMap[userId].username || userIdAndDeviceIdToDetailMap[userId].name
+                            const _userDisplayName = userIdAndDeviceIdToDetailMap[userId].name || userIdAndDeviceIdToDetailMap[userId].username
                             const _set = new Set();
                             for (const us of userIdAndHardDeviceToContainMap[userId]) {
                                 if (us.branchType !== 'user') {
@@ -673,28 +694,44 @@ export default {
                     const _temps = {
                         id: departmentId,
                         value: departmentId,
-                        label: departmentInfoMap[departmentId].name
+                        label: departmentInfoMap[departmentId].name,
+                        children: []
                     }
+                    let underDepartmentAllMember = [];
                     if (departmentIdAndUserIdMap[departmentId] && departmentIdAndUserIdMap[departmentId].size > 0) {
-                        let underDepartmentAllMember = [];
-
                         for (const userid of departmentIdAndUserIdMap[departmentId]) {
-                            underDepartmentAllMember = [...underDepartmentAllMember, ...userIdAndHardDeviceToContainMap[userid]];
-                            tileResult = [...tileResult, ...userIdAndHardDeviceToContainMap[userid]];
-                            delete userIdAndHardDeviceToContainMap[userid];
+                            if (userIdAndHardDeviceToContainMap[userid]) {
+                                underDepartmentAllMember = [...underDepartmentAllMember, ...userIdAndHardDeviceToContainMap[userid]];
+                                tileResult = [...tileResult, ...userIdAndHardDeviceToContainMap[userid]];
+                                delete userIdAndHardDeviceToContainMap[userid];
+                            }
                         }
-                        _temps.children = underDepartmentAllMember;
                     }
+                    _temps.children = underDepartmentAllMember;
 
                     // 如果当前层级没有这个树枝
                     if (!(treeLavelAndSamlLevelMemeberIdMap[`level${s}`] && treeLavelAndSamlLevelMemeberIdMap[`level${s}`].has(departmentId))) {
-                        if (s === 1) {//跟层级
+                        if (treeResult.length === 0) {
                             treeResult.push(_temps);
                             evalPath = `treeResult[${treeResult.length} - 1]`;
-                        } else if (s > 1) {
-                            eval(evalPath).children = (eval(evalPath).children || []).push(_temp);
+                        } else {
+                            if (!evalPath) {
+                                evalPath = `treeResult[${treeResult.length} - 1]`;
+                            }
+                            if (!eval(evalPath).children) {
+                                eval(evalPath).children = [];
+                            }
+                            eval(evalPath).children = [...eval(evalPath).children, _temps];
                             evalPath = `${evalPath}.children[${evalPath}.children.length - 1]`;
                         }
+                        // if (!evalPath) {
+                        //     treeResult.push(_temps);
+                        //     evalPath = `treeResult[${treeResult.length} - 1].children`;
+                        // } else {
+                        //     console.log(s, evalPath, eval(evalPath));
+                        //     eval(evalPath).push(_temps);
+                        //     evalPath = `${evalPath}[${evalPath}.length - 1].children`;
+                        // }
 
                         if (!treeLavelAndSamlLevelMemeberIdMap[`level${s}`]) {
                             treeLavelAndSamlLevelMemeberIdMap[`level${s}`] = new Set();
@@ -951,10 +988,10 @@ export default {
                     oneLayoutFinalData.windowGroups = result;
 
                     if (hasWrongData) {
-                        this.$message({
-                            type: "warning",
-                            message: '没有高亮的小屏幕都将按照"自动"显示处理，如需更改请重新编辑。'
-                        });
+                        // this.$message({
+                        //     type: "warning",
+                        //     message: '没有高亮的小屏幕都将按照"自动"显示处理，如需更改请重新编辑。'
+                        // });
                     }
                 } else {
                     oneLayoutFinalData.windowGroups = this.currentLayoutData.locations.map(window => {
@@ -979,7 +1016,7 @@ export default {
                         }
                     }
                 } else {
-                    this.layoutRuleList.push(oneLayoutFinalData);
+                    this.layoutRuleList = [oneLayoutFinalData, ...this.layoutRuleList];
                 }
 
                 this.choseLayoutType = '';
@@ -1233,11 +1270,6 @@ export default {
     color: #fff;
     background-color: #f56c6c;
     border-color: #f56c6c;
-}
-.metting_template_title {
-    font-size: 16px;
-    line-height: 30px;
-    margin-bottom: -15px;
 }
 .mr10 {
     margin-right: 10px;
